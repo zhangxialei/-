@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>三骰追点 · 联机</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2312332a'/%3E%3Crect x='7' y='7' width='18' height='18' rx='3' fill='%23EDE5D8'/%3E%3Ccircle cx='12' cy='12' r='2' fill='%231b2f6b'/%3E%3Ccircle cx='20' cy='20' r='2' fill='%23c33'/%3E%3C/svg%3E">
+<style>
+:root{
+  --ink:#EDE5D8;--dim:#8fa49a;--gold:#D9A94E;
+  --line:rgba(237,229,216,.14);--r:4px;
+  --t4:#D9A94E;--t3:#57A99B;--t2:#6C8FC4;--t1:#87978f;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{
+  background:radial-gradient(130% 75% at 50% -10%, #1b4538 0%, #0d231d 48%, #070d0b 100%) fixed;
+  color:var(--ink);font-family:"PingFang SC","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;
+}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:radial-gradient(rgba(255,255,255,.045) 1px, transparent 1px);background-size:3px 3px;opacity:.6}
+#app{position:relative;z-index:1;display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;max-width:460px;margin:0 auto}
+
+.bar{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 8px}
+.bar h1{margin:0;font-size:20px;letter-spacing:.12em;font-weight:600}
+.bar h1 span{color:var(--gold)}
+.bar-tools{display:flex;gap:8px}
+.ghost{background:none;border:1px solid var(--line);color:var(--dim);font-size:13px;padding:7px 13px;border-radius:var(--r);font-family:inherit;cursor:pointer}
+.ghost:active{color:var(--ink);border-color:rgba(217,169,78,.5)}
+
+#stage{flex:1;padding:6px 16px 10px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.lede{color:var(--dim);font-size:13px;line-height:1.7;margin:4px 2px 16px}
+.lede b{color:var(--ink);font-weight:600}
+.field{display:flex;align-items:center;justify-content:space-between;margin:0 0 12px}
+.field-label{font-size:14px}
+.sub-label{font-size:11px;color:#5f746b}
+
+.namebox{border:1px solid var(--line);border-radius:var(--r);padding:0 14px;background:rgba(255,255,255,.025);margin-bottom:14px}
+.namebox input{width:100%;background:none;border:0;color:var(--ink);font-size:16px;padding:15px 0;font-family:inherit;outline:none}
+.namebox input::placeholder{color:#546a61}
+
+.skins{display:flex;gap:6px;margin:0 0 16px}
+.skin-chip{flex:1;border:1px solid var(--line);border-radius:var(--r);background:rgba(255,255,255,.03);
+  padding:9px 2px 7px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;font-family:inherit;transition:border-color .18s,background .18s}
+.skin-chip.on{border-color:rgba(217,169,78,.8);background:rgba(217,169,78,.1)}
+.chip-name{font-size:10px;color:var(--dim);white-space:nowrap}
+.skin-chip.on .chip-name{color:var(--ink)}
+
+.primary{width:100%;border:0;border-radius:var(--r);padding:16px;font-size:16px;font-weight:600;letter-spacing:.08em;background:var(--gold);color:#10241d;cursor:pointer;font-family:inherit}
+.primary:active{background:#c08e34}
+.primary:disabled{background:#3a4a44;color:#8a9b93;cursor:default}
+
+.plist{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+.prow{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:var(--r);padding:8px 12px;background:rgba(255,255,255,.025)}
+.prow.me{border-color:rgba(217,169,78,.55);background:rgba(217,169,78,.07)}
+.prow .nm{flex:1;min-width:0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow .tag{font-size:10px;color:#eccb8d;border:1px solid rgba(217,169,78,.45);padding:1px 5px;border-radius:2px;flex:none}
+.prow .tag.mine{color:#eab3b0;border-color:rgba(181,74,69,.5)}
+.mini-dice{display:flex;gap:5px;flex:none}
+.empty{font-size:13px;color:#5f746b;padding:16px 0;text-align:center}
+
+/* 3D 骰子 */
+.dice-row{display:flex;gap:8px;justify-content:center;align-items:center;margin-bottom:8px}
+.dice-lg{display:flex;gap:11px;justify-content:center;align-items:center;margin-bottom:12px}
+.mini-row{gap:6px;margin:8px 0 7px}
+.die-wrap{position:relative;display:inline-block;width:var(--ds);height:var(--ds);perspective:calc(var(--ds) * 11)}
+.shade{position:absolute;left:6%;right:6%;bottom:-11%;height:30%;
+  background:radial-gradient(ellipse at 50% 40%, rgba(0,0,0,.42), rgba(0,0,0,0) 66%);
+  filter:blur(calc(var(--ds) * .05));pointer-events:none}
+.die3d{position:absolute;inset:0;transform-style:preserve-3d}
+.cube{position:absolute;inset:0;transform-style:preserve-3d;will-change:transform}
+.face{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:9%;
+  background:radial-gradient(125% 125% at 24% 10%, var(--f1), var(--f2) 36%, var(--f3) 72%, var(--f4) 100%);
+  border-radius:calc(var(--ds) * var(--rad, 0));
+  box-shadow:inset 0 0 0 1px var(--edge), inset 0 calc(var(--ds)*.05) calc(var(--ds)*.045) rgba(255,255,255,.5),
+    inset 0 calc(var(--ds)*-.075) calc(var(--ds)*.08) var(--low);
+  backface-visibility:hidden}
+.coreface{position:absolute;left:2%;top:2%;width:96%;height:96%;background:var(--core);border-radius:0;backface-visibility:hidden}
+.face i{display:block;background:transparent;justify-self:center;align-self:center;width:var(--pp);height:var(--pp)}
+.face i.on{background:radial-gradient(circle at 34% 26%, var(--p1), var(--p2) 68%);
+  box-shadow:inset 0 1.5px 2px rgba(0,0,0,.5), inset 0 -1px 1px rgba(255,255,255,.22), 0 1px 0 rgba(255,255,255,.5)}
+.face.red i.on{background:radial-gradient(circle at 34% 26%, var(--q1), var(--q2) 68%)}
+
+.skin-0{--rad:0;--corad:0;--f1:#fffefa;--f2:#f8f2e5;--f3:#eadfcb;--f4:#d9cbaf;
+  --p1:#3c4f8d;--p2:#0b1233;--q1:#d85a45;--q2:#7b1712;--edge:rgba(146,124,92,.4);--low:rgba(138,112,78,.28);--core:#dccdb2}
+.skin-1{--rad:0;--corad:0;--f1:#f4fffb;--f2:#cdf1e2;--f3:#8ed4b8;--f4:#59b18f;
+  --p1:#0e5a41;--p2:#04301f;--q1:#d8a848;--q2:#7c590e;--edge:rgba(38,112,86,.4);--low:rgba(22,84,62,.34);--core:#96dcc2}
+.skin-2{--rad:0;--corad:0;--f1:#6a6a76;--f2:#3f3f4a;--f3:#23232d;--f4:#0e0e15;
+  --p1:#f6dba0;--p2:#9a6e1b;--q1:#fff3d2;--q2:#a8822d;--edge:rgba(226,204,150,.3);--low:rgba(0,0,0,.62);--core:#1c1c26}
+.skin-3{--rad:0;--corad:0;--f1:#e48479;--f2:#bd4a41;--f3:#932d27;--f4:#631815;
+  --p1:#ffe9cf;--p2:#8d5a2c;--q1:#fff0d0;--q2:#a06a24;--edge:rgba(58,12,10,.5);--low:rgba(36,6,4,.5);--core:#8d2b26}
+.skin-4{--rad:0;--corad:0;--f1:#ffffff;--f2:#edf4ff;--f3:#cadff8;--f4:#9dbde3;
+  --p1:#2b58bb;--p2:#0e2360;--q1:#cf4a33;--q2:#791c12;--edge:rgba(58,90,142,.3);--low:rgba(48,78,128,.24);--core:#b3c9e5}
+
+.skin-1 .face::after,.skin-4 .face::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(122deg, rgba(255,255,255,.62) 0%, rgba(255,255,255,.08) 34%, rgba(255,255,255,0) 55%, rgba(255,255,255,.22) 100%)}
+.skin-2 .face::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:repeating-linear-gradient(118deg, rgba(255,255,255,.14) 0 1px, rgba(255,255,255,0) 1px 7px)}
+.skin-0 .face i{border-radius:50%}
+.skin-1 .face i{border-radius:50%}
+.skin-1 .face i.on{box-shadow:inset 0 1px 2px rgba(0,0,0,.35), 0 0 4px rgba(255,255,255,.5)}
+.skin-2 .face i.on{border-radius:14%;box-shadow:inset 0 1px 1px rgba(0,0,0,.6)}
+.skin-3 .face i.on{border-radius:50%;box-shadow:none;background:radial-gradient(circle, rgba(0,0,0,0) 39%, var(--p1) 43%, var(--p2) 100%)}
+.skin-4 .face i.on{box-shadow:inset 0 1px 1px rgba(0,0,0,.28), 0 0 3px rgba(43,86,184,.4)}
+.cube.glow .face{box-shadow:inset 0 0 0 2px rgba(242,203,126,.95), inset 0 0 calc(var(--ds)*.32) rgba(242,203,126,.5)}
+
+/* 特效 */
+.fx{position:absolute;left:50%;top:56%;width:0;height:0;pointer-events:none;z-index:3}
+.fx i{position:absolute;left:0;top:0;display:block;opacity:0}
+.fx-dust i{width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:var(--ac);box-shadow:0 0 6px rgba(255,246,225,.6);animation:dustUp .85s ease-out var(--dl) forwards}
+@keyframes dustUp{0%{transform:translate(0,0) scale(.3);opacity:0}24%{opacity:.9}100%{transform:translate(var(--dx),-42px) scale(.85);opacity:0}}
+.fx-ripple i{width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;border:2px solid var(--ac);animation:rippleOut 1.05s cubic-bezier(.2,.72,.3,1) var(--dl) forwards}
+@keyframes rippleOut{0%{transform:scale(.22);opacity:.9}100%{transform:scale(3.5);opacity:0}}
+.fx-shard i{width:9px;height:9px;margin:-4.5px 0 0 -4.5px;background:var(--ac);clip-path:polygon(50% 0,100% 100%,0 100%);animation:shardOut .8s cubic-bezier(.15,.82,.3,1) var(--dl) forwards}
+@keyframes shardOut{0%{transform:translate(6px,0) rotate(0deg) scale(.3);opacity:1}100%{transform:translate(var(--tx),var(--ty)) rotate(240deg) scale(.8);opacity:0}}
+.fx-ember i{width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:radial-gradient(circle,#ffe0bb,var(--ac) 70%);box-shadow:0 0 9px var(--ac);animation:emberUp .95s ease-out var(--dl) forwards}
+@keyframes emberUp{0%{transform:translate(0,0) scale(.35);opacity:0}26%{opacity:1}100%{transform:translate(var(--tx),calc(var(--ty) - 34px)) scale(.75);opacity:0}}
+.fx-shock i{width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;border:2px solid var(--ac);box-shadow:0 0 16px rgba(123,167,239,.35);animation:shockOut .72s ease-out var(--dl) forwards}
+@keyframes shockOut{0%{transform:scale(.18);opacity:.95}100%{transform:scale(4.4);opacity:0}}
+#flash{position:fixed;inset:0;z-index:20;pointer-events:none;opacity:0;
+  background:radial-gradient(circle at 50% 58%, rgba(244,206,132,.55), rgba(244,206,132,.14) 42%, rgba(244,206,132,0) 66%)}
+@keyframes flashIn{0%{opacity:0}22%{opacity:1}100%{opacity:0}}
+#flash.on{animation:flashIn .62s ease-out}
+@keyframes feltShake{0%,100%{transform:translate(0,0)}20%{transform:translate(-2px,1px)}40%{transform:translate(2px,-1px)}60%{transform:translate(-1px,-2px)}80%{transform:translate(1px,2px)}}
+.feltshake{animation:feltShake .3s ease-out}
+@keyframes pop{from{transform:scale(.96);opacity:0}to{transform:scale(1);opacity:1}}
+.verdict{animation:pop .3s ease-out}
+@keyframes winPulse{0%{box-shadow:0 0 0 0 rgba(242,203,126,.5)}70%{box-shadow:0 0 0 16px rgba(242,203,126,0)}100%{box-shadow:0 0 0 0 rgba(242,203,126,0)}}
+.verdict.ok{animation:pop .3s ease-out, winPulse .8s ease-out}
+
+/* 牌桌 */
+.tablehead{display:block;margin:2px 2px 5px}
+.round{font-size:12px;color:var(--dim);letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.order{font-size:10px;color:#5f746b;letter-spacing:.06em;margin:0 2px 11px;white-space:nowrap}
+.players{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.pcard{position:relative;border:1px solid var(--line);border-radius:var(--r);
+  background:linear-gradient(170deg, rgba(23,54,44,.92), rgba(11,32,26,.92));padding:10px 9px 9px;
+  transition:border-color .2s,box-shadow .2s}
+.pcard.is-chaser{border-color:rgba(181,74,69,.9);box-shadow:0 0 0 2px rgba(181,74,69,.32), 0 10px 26px rgba(181,74,69,.2)}
+.pcard.is-chaser::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:4px 0 0 4px;background:linear-gradient(180deg,#e0796f,#8d2b26)}
+.pcard.is-target{border-color:rgba(217,169,78,.7);box-shadow:0 0 0 1px rgba(217,169,78,.25), 0 6px 18px rgba(217,169,78,.1)}
+.pcard.is-me{outline:1px dashed rgba(217,169,78,.35);outline-offset:-4px}
+.pcard-top{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:8px}
+.pname{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.badge{font-size:10px;letter-spacing:.06em;padding:2px 5px;border-radius:2px;flex:none;white-space:nowrap}
+.badge.chaser{background:rgba(181,74,69,.22);color:#eab3b0}
+.badge.target{background:rgba(217,169,78,.2);color:#eccb8d}
+.badge.lead{background:rgba(255,255,255,.07);color:var(--dim)}
+.badge.pos{background:none;color:#5f746b;padding:2px 0}
+.cups{font-size:10px;color:#c07a76;margin-left:3px}
+.ptype{text-align:center;font-size:13px;letter-spacing:.04em;line-height:1.4}
+.ptype .sub{font-size:12px;opacity:.78;margin-left:4px}
+.ptype.t4{color:var(--t4)}.ptype.t3{color:var(--t3)}.ptype.t2{color:var(--t2)}.ptype.t1{color:var(--t1)}
+.players .pcard:last-child:nth-child(odd){grid-column:span 2}
+
+#dock{position:relative;padding:14px 16px calc(16px + env(safe-area-inset-bottom));border-top:1px solid rgba(237,229,216,.1);
+  background:linear-gradient(180deg, rgba(6,13,11,.55), rgba(6,13,11,.94));backdrop-filter:blur(6px)}
+#dock[hidden]{display:none}
+.callout{margin-bottom:12px}
+.callout-key{font-size:13px;color:var(--dim);margin-bottom:5px}
+.callout-key b{color:#eab3b0;font-weight:600;font-size:15px}
+.callout-key b.gold{color:var(--gold)}
+.callout-sub{font-size:12px;color:var(--dim);line-height:1.6}
+.callout-sub b{color:var(--gold);font-weight:500}
+.plans{display:flex;flex-direction:column;gap:9px}
+.plan{display:block;text-align:left;border:1px solid var(--line);border-radius:var(--r);background:rgba(255,255,255,.03);padding:13px 14px;cursor:pointer;font-family:inherit;color:inherit}
+.plan:active{background:rgba(217,169,78,.1);border-color:rgba(217,169,78,.55)}
+.plan-t{display:block;font-size:15px;font-weight:600;margin-bottom:4px}
+.plan-d{display:block;font-size:12px;color:var(--dim);line-height:1.5}
+.rollstage{border:1px solid var(--line);border-radius:var(--r);padding:15px 14px 12px;background:rgba(255,255,255,.025);margin-bottom:12px;position:relative;overflow:hidden}
+.rollstage-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+.rollstage-top .who{font-size:13px}
+.rollstage-top .counter{font-size:12px;color:var(--gold);letter-spacing:.06em;font-variant-numeric:tabular-nums}
+.compare{font-size:12px;color:var(--dim);text-align:center;line-height:1.6}
+.compare b{color:var(--ink);font-weight:500}
+.compare .need{color:var(--gold)}
+.history{display:flex;gap:6px;margin-top:10px;overflow-x:auto;padding-bottom:2px}
+.history::-webkit-scrollbar{display:none}
+.chip{flex:none;font-size:11px;padding:3px 8px;border-radius:2px;background:rgba(255,255,255,.05);color:var(--dim);white-space:nowrap}
+.chip.t4{color:var(--t4);background:rgba(217,169,78,.12)}
+.chip.t3{color:var(--t3);background:rgba(87,169,155,.12)}
+.chip.t2{color:var(--t2);background:rgba(108,143,196,.12)}
+.verdict{padding:18px 16px;border-radius:var(--r);margin-bottom:12px;border:1px solid var(--line)}
+.verdict.ok{border-color:rgba(217,169,78,.55);background:rgba(217,169,78,.07)}
+.verdict.bad{border-color:rgba(181,74,69,.55);background:rgba(181,74,69,.09)}
+.verdict-title{font-size:26px;font-weight:600;letter-spacing:.1em;margin-bottom:6px}
+.verdict.ok .verdict-title{color:var(--gold)}
+.verdict.bad .verdict-title{color:#eab3b0}
+.verdict-sub{font-size:13px;color:var(--dim);letter-spacing:.03em;line-height:1.6}
+.verdict .mini-row{margin:4px 0 10px}
+.duel{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;margin-bottom:12px}
+.duel-side{border:1px solid var(--line);border-radius:var(--r);padding:10px;background:rgba(255,255,255,.03)}
+.duel-role{font-size:10px;color:var(--dim);letter-spacing:.1em;margin-bottom:5px}
+.duel-name{font-size:12px;margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.duel-type{font-size:13px;font-weight:600}
+.duel-type .sub{font-size:11px;font-weight:400;opacity:.75;margin-left:3px}
+.duel-vs{font-size:12px;color:#5f746b;letter-spacing:.06em}
+.summary{border:1px solid var(--line);border-radius:var(--r);padding:11px 14px;margin-bottom:12px;background:rgba(255,255,255,.025)}
+.sum-row{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px solid rgba(237,229,216,.07)}
+.sum-row:last-child{border-bottom:0}
+.sum-name{font-size:13px}
+.sum-cups{font-size:12px;color:#c07a76;font-variant-numeric:tabular-nums}
+.sum-cups.zero{color:#5f746b}
+.linkrow{display:flex;justify-content:center;margin-top:6px}
+.mini{background:none;border:0;color:var(--dim);font-size:12px;padding:8px 12px;cursor:pointer;font-family:inherit;letter-spacing:.04em}
+.mini:active{color:var(--gold)}
+.waitline{font-size:13px;color:var(--dim);text-align:center;padding:14px 0 4px;letter-spacing:.04em}
+.waitline b{color:var(--ink)}
+
+.scrim{position:fixed;inset:0;background:rgba(3,7,6,.66);z-index:8;opacity:0;pointer-events:none;transition:opacity .22s}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:9;max-width:460px;margin:0 auto;background:#0b1c17;
+  border-top:1px solid rgba(217,169,78,.3);border-radius:10px 10px 0 0;padding:16px 20px calc(24px + env(safe-area-inset-bottom));
+  transform:translateY(101%);transition:transform .28s cubic-bezier(.2,.8,.2,1);max-height:82vh;overflow-y:auto}
+.sheet.on{transform:translateY(0)}
+.sheet h2{margin:0 0 14px;font-size:15px;letter-spacing:.1em;font-weight:600;color:var(--gold)}
+.sheet dt{font-size:13px;margin:14px 0 5px;font-weight:600}
+.sheet dd{margin:0;font-size:13px;color:var(--dim);line-height:1.75}
+.sheet .close{width:100%;margin-top:20px;border:1px solid var(--line);background:none;color:var(--ink);padding:13px;border-radius:var(--r);font-size:14px;font-family:inherit;cursor:pointer}
+
+#toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,0);z-index:30;background:rgba(12,30,24,.96);
+  border:1px solid rgba(217,169,78,.45);color:var(--ink);font-size:13px;padding:10px 16px;border-radius:4px;opacity:0;pointer-events:none;transition:opacity .2s}
+#toast.on{opacity:1}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="bar">
+    <h1>三骰<span>追点</span></h1>
+    <div class="bar-tools">
+      <button class="ghost" id="btnSound">声音 开</button>
+      <button class="ghost" id="btnRule">规则</button>
+    </div>
+  </header>
+  <main id="stage"></main>
+  <div id="dock" hidden></div>
+</div>
+<div id="flash"></div>
+<div id="toast"></div>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet">
+  <h2>怎么玩</h2>
+  <dl>
+    <dt>骰子与公开</dt>
+    <dd>每人 3 颗骰子，读朝上那一面，三颗按点数从小到大排。红点是 1 点和 4 点。开局所有人自动摇一次，骰面全公开。</dd>
+    <dt>牌型大小</dt>
+    <dd>豹子 ＞ 顺子 ＞ 对子 ＞ 杂牌。等级永远优先：再大的对子也小于任意顺子。</dd>
+    <dt>谁追谁</dt>
+    <dd>永远是倒数第一追倒数第二。追上就按牌面重新排名。</dd>
+    <dt>两种玩法</dt>
+    <dd>① 先喝一杯，换 10 次机会；<br>② 先摇 5 次，追到免喝，没追到喝一杯。</dd>
+    <dt>怎样算追上</dt>
+    <dd>新摇出的牌型不小于对方就算追上，打平也算。</dd>
+    <dt>追上之后</dt>
+    <dd>可以继续丢，接着追当时排在他上面的人；也可以收手，换下一位。</dd>
+    <dt>联机方式</dt>
+    <dd>一台设备开主机，其他人连同一个 WiFi 或热点，各自用自己手机打开网页报名、选骰子。名次和骰面由主机同步，谁都能看到。</dd>
+  </dl>
+  <button class="close" id="btnClose">知道了</button>
+</div>
+
+<script>
+/* ================= 骰子几何 ================= */
+const PIP = {1:[5],2:[1,9],3:[1,5,9],4:[1,3,7,9],5:[1,3,5,7,9],6:[1,3,4,6,7,9]};
+const FACE_DEF = [
+  {v:1, tf:'translateZ(var(--h))'},
+  {v:6, tf:'rotateY(180deg) translateZ(var(--h))'},
+  {v:2, tf:'rotateY(90deg) translateZ(var(--h))'},
+  {v:5, tf:'rotateY(-90deg) translateZ(var(--h))'},
+  {v:3, tf:'rotateX(90deg) translateZ(var(--h))'},
+  {v:4, tf:'rotateX(-90deg) translateZ(var(--h))'}
+];
+const BASE = {1:[0,0], 2:[0,-90], 5:[0,90], 3:[-90,0], 4:[90,0], 6:[0,180]};
+const TILT_X = -42, TILT_Y = -24, TIP = 90;
+const SKINS = [
+  {name:'象牙白', accent:'#f7efdd', fx:'dust',  pips:0.19},
+  {name:'翡翠',  accent:'#5ed3a8', fx:'ripple',pips:0.185},
+  {name:'黑曜石', accent:'#e8c477', fx:'shard', pips:0.17},
+  {name:'酒红',  accent:'#e8695c', fx:'ember', pips:0.2},
+  {name:'蓝瓷',  accent:'#7ba7ef', fx:'shock', pips:0.16}
+];
+function faceHTML(v, tf){
+  const on = PIP[v] || [];
+  const red = (v === 1 || v === 4) ? ' red' : '';
+  let cells = '';
+  for(let i=1;i<=9;i++) cells += '<i' + (on.indexOf(i) > -1 ? ' class="on"' : '') + '></i>';
+  return '<span class="face' + red + '" style="transform:' + tf + '">' + cells + '</span>';
+}
+function restTf(v, j){
+  const b = BASE[v] || [0,0];
+  return 'rotateX(' + TILT_X + 'deg) rotateY(' + TILT_Y + 'deg) rotateX(' + TIP +
+         'deg) rotateY(' + j + 'deg) rotateX(' + b[0] + 'deg) rotateY(' + b[1] + 'deg)';
+}
+function cubeHTML(v, size, j, skin){
+  const h = Math.round(size / 2), hc = Math.round(h * 0.9);
+  const sk = (skin === undefined || skin === null) ? 0 : skin;
+  const pp = Math.round(size * SKINS[sk].pips);
+  const jj = j || 0;
+  const core = [
+    'translateZ(' + hc + 'px)', 'rotateY(180deg) translateZ(' + hc + 'px)',
+    'rotateY(90deg) translateZ(' + hc + 'px)', 'rotateY(-90deg) translateZ(' + hc + 'px)',
+    'rotateX(90deg) translateZ(' + hc + 'px)', 'rotateX(-90deg) translateZ(' + hc + 'px)'
+  ];
+  let faces = '', cores = '';
+  for(let i=0;i<FACE_DEF.length;i++) faces += faceHTML(FACE_DEF[i].v, FACE_DEF[i].tf);
+  for(let i=0;i<core.length;i++) cores += '<span class="coreface" style="transform:' + core[i] + '"></span>';
+  return '<span class="die-wrap" style="--ds:' + size + 'px">' +
+           '<span class="shade"></span>' +
+           '<span class="die3d skin-' + sk + '" style="--ds:' + size + 'px;--h:' + h + 'px;--pp:' + pp + 'px">' +
+             '<span class="cube" data-j="' + jj + '" style="transform:' + restTf(v, jj) + '">' + cores + faces + '</span>' +
+           '</span>' +
+         '</span>';
+}
+function setCube(cube, rx, ry){
+  const j = cube.dataset.j || 0;
+  cube.style.transform = 'rotateX(' + TILT_X + 'deg) rotateY(' + TILT_Y + 'deg) rotateX(' + TIP +
+    'deg) rotateY(' + j + 'deg) rotateX(' + rx.toFixed(1) + 'deg) rotateY(' + ry.toFixed(1) + 'deg)';
+}
+
+/* ================= 音效 ================= */
+let AC = null, soundOn = true;
+function ensureAudio(){
+  if(!soundOn) return null;
+  if(!AC){
+    const C = window.AudioContext || window.webkitAudioContext;
+    if(!C) return null;
+    AC = new C();
+  }
+  if(AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function noiseBurst(ctx, t, dur, freq, q, gain){
+  const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const ch = buf.getChannelData(0);
+  for(let i=0;i<len;i++) ch[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 2.4);
+  const src = ctx.createBufferSource(); src.buffer = buf;
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = freq; bp.Q.value = q;
+  const g = ctx.createGain(); g.gain.value = gain;
+  src.connect(bp); bp.connect(g); g.connect(ctx.destination); src.start(t);
+}
+function sfxRoll(dur){
+  const ctx = ensureAudio(); if(!ctx) return;
+  const t0 = ctx.currentTime + 0.02;
+  for(let i=0;i<8;i++) noiseBurst(ctx, t0 + dur*0.72*(i/8) + Math.random()*0.03, 0.085, 1800 + Math.random()*2300, 1.2, 0.2*(1 - (i/8)*0.5));
+}
+function sfxLand(){
+  const ctx = ensureAudio(); if(!ctx) return;
+  noiseBurst(ctx, ctx.currentTime + 0.01, 0.06, 2900, 1.6, 0.33);
+  noiseBurst(ctx, ctx.currentTime + 0.05, 0.05, 1300, 1.4, 0.16);
+}
+function sfxWin(){
+  const ctx = ensureAudio(); if(!ctx) return;
+  [660, 990, 1320].forEach(function(f, i){
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'triangle'; o.frequency.value = f;
+    const t = ctx.currentTime + 0.02 + i*0.085;
+    g.gain.setValueAtTime(0.001, t);
+    g.gain.exponentialRampToValueAtTime(0.26, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+    o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + 0.44);
+  });
+}
+function sfxLose(){
+  const ctx = ensureAudio(); if(!ctx) return;
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  const t = ctx.currentTime + 0.02;
+  o.type = 'sine'; o.frequency.setValueAtTime(230, t); o.frequency.exponentialRampToValueAtTime(105, t + 0.34);
+  g.gain.setValueAtTime(0.22, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
+  o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + 0.4);
+}
+
+/* ================= 特效 ================= */
+function fxBurst(host, skinIdx, big){
+  if(!host) return;
+  const S = SKINS[skinIdx] || SKINS[0];
+  const el = document.createElement('span');
+  el.className = 'fx fx-' + S.fx + (big ? ' big' : '');
+  el.style.setProperty('--ac', S.accent);
+  const counts = {dust:11, ripple:3, shard:9, ember:11, shock:2};
+  const n = counts[S.fx] || 6;
+  const spread = big ? 1.8 : 1;
+  for(let i=0;i<n;i++){
+    const it = document.createElement('i');
+    it.style.setProperty('--dl', (i * (S.fx === 'ripple' ? 0.13 : 0.045)).toFixed(2) + 's');
+    const ang = Math.random() * Math.PI * 2;
+    const dist = (24 + Math.random() * 34) * spread;
+    it.style.setProperty('--tx', (Math.cos(ang) * dist).toFixed(0) + 'px');
+    it.style.setProperty('--ty', (Math.sin(ang) * dist).toFixed(0) + 'px');
+    it.style.setProperty('--dx', ((Math.random() * 44) - 22).toFixed(0) + 'px');
+    el.appendChild(it);
+  }
+  host.appendChild(el);
+  setTimeout(function(){ el.remove(); }, big ? 1500 : 1000);
+}
+function screenFlash(){
+  const f = document.getElementById('flash');
+  if(!f) return;
+  f.classList.remove('on'); void f.offsetWidth; f.classList.add('on');
+}
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(function(){ t.classList.remove('on'); }, 1800);
+}
+
+/* ================= 掷骰动画 ================= */
+function nextAngle(cur, base){
+  const k = Math.ceil((cur - base) / 360);
+  let t = base + k*360;
+  while(t - cur < 200) t += 360;
+  return t;
+}
+function rollAnim(box, finals, dur, opt){
+  const opts = opt || {};
+  const cubes = Array.prototype.slice.call(box.querySelectorAll('.cube'));
+  if(!cubes.length) return Promise.resolve();
+  cubes.forEach(function(c){ c.classList.remove('glow'); });
+  const items = cubes.map(function(c, i){
+    return {c:c, v:finals[i], rx:Math.random()*360, ry:Math.random()*360,
+      vx:880 + Math.random()*460, vy:660 + Math.random()*520,
+      stop:(dur/1000)*([0.6, 0.82, 1.0][i] || 1.0), phase:'spin', land:null};
+  });
+  if(opts.sound) sfxRoll(dur);
+  return new Promise(function(resolve){
+    const t0 = performance.now();
+    function ease(p){ return 1 - Math.pow(1 - p, 3); }
+    function frame(now){
+      const t = (now - t0) / 1000;
+      let alive = false;
+      items.forEach(function(it){
+        if(it.phase === 'done') return;
+        alive = true;
+        if(it.phase === 'spin'){
+          if(t < it.stop){
+            it.rx += it.vx * 0.016; it.ry += it.vy * 0.016;
+            setCube(it.c, it.rx, it.ry);
+          }else{
+            const b = BASE[it.v] || [0,0];
+            it.tx = nextAngle(it.rx, b[0]); it.ty = nextAngle(it.ry, b[1]);
+            it.land = {t0:now, rx0:it.rx, ry0:it.ry, dur:280};
+            it.phase = 'land';
+            if(opts.sound) sfxLand();
+          }
+        }else if(it.phase === 'land'){
+          const p = Math.min(1, (now - it.land.t0) / it.land.dur);
+          const e = ease(p);
+          it.rx = it.land.rx0 + (it.tx - it.land.rx0) * e;
+          it.ry = it.land.ry0 + (it.ty - it.land.ry0) * e;
+          setCube(it.c, it.rx, it.ry);
+          if(p >= 1){
+            it.phase = 'done';
+            it.c.style.transform = restTf(it.v, +it.c.dataset.j || 0);
+          }
+        }
+      });
+      if(alive) requestAnimationFrame(frame);
+      else{
+        if(opts.shake){
+          const panel = box.closest('.rollstage');
+          if(panel){ panel.classList.remove('feltshake'); void panel.offsetWidth; panel.classList.add('feltshake'); }
+        }
+        resolve();
+      }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+/* ================= 会话 ================= */
+let me = localStorage.getItem('szqd_pid') || null;
+let myName = localStorage.getItem('szqd_name') || '';
+let mySkin = Number(localStorage.getItem('szqd_skin') || 0);
+let state = null;
+let seenRoll = 0, seenDeal = 0, pendingRoll = false, pendingDeal = false;
+let joinBuilt = false;
+
+function findP(id){
+  if(!state) return null;
+  for(let i=0;i<state.players.length;i++) if(state.players[i].id === id) return state.players[i];
+  return null;
+}
+function esc(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+
+async function api(path, body){
+  const opt = body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)} : undefined;
+  const r = await fetch(path, opt);
+  return r.json();
+}
+function act(type, extra){
+  const body = Object.assign({type:type, pid:me}, extra || {});
+  return api('/api/action', body).then(function(j){
+    if(!j.ok && j.err) toast(j.err);
+    return j;
+  });
+}
+
+/* ================= 轮询 ================= */
+async function loop(){
+  let since = state ? state.v : 0;
+  while(true){
+    try{
+      const r = await fetch('/api/state?since=' + since);
+      const j = await r.json();
+      if(j && j.state){
+        since = j.state.v;
+        onState(j.state);
+      }
+    }catch(e){
+      await sleep(1200);
+    }
+    await sleep(0);
+  }
+}
+function onState(s){
+  const prev = state;
+  state = s;
+  if(me && !findP(me)){
+    if(s.phase === 'lobby'){ joinRoom(true); }
+    else { me = null; localStorage.removeItem('szqd_pid'); }
+  }
+  if(s.lastRoll && s.lastRoll.seq !== seenRoll){ seenRoll = s.lastRoll.seq; pendingRoll = true; }
+  if(s.dealSeq && s.dealSeq !== seenDeal){ seenDeal = s.dealSeq; pendingDeal = true; }
+  if(prev && prev.result !== s.result && s.phase !== 'result'){ }
+  render();
+  afterRender();
+}
+
+function afterRender(){
+  if(pendingRoll){
+    const box = document.getElementById('active-dice');
+    if(box && state.lastRoll) rollAnim(box, state.lastRoll.dice, 820, {sound:true, shake:true});
+    pendingRoll = false;
+  }
+  if(pendingDeal){
+    const boxes = document.querySelectorAll('.dice-row[data-dice]');
+    Array.prototype.forEach.call(boxes, function(box){
+      const p = findP(box.getAttribute('data-dice'));
+      if(p && p.res) rollAnim(box, p.dice, 760, {sound:false});
+    });
+    pendingDeal = false;
+  }
+}
+
+/* ================= 视图 ================= */
+function render(){
+  const stage = document.getElementById('stage');
+  const dock = document.getElementById('dock');
+  if(!state){ return; }
+  if(!me){ renderJoin(stage, dock); return; }
+  if(state.phase === 'lobby'){ renderLobby(stage, dock); return; }
+  renderGame(stage, dock);
+}
+
+function skinChips(selected, attr){
+  let out = '';
+  SKINS.forEach(function(s, i){
+    out += '<button class="skin-chip' + (i === selected ? ' on' : '') + '" ' + attr + '="' + i + '">' +
+             cubeHTML(4, 28, -8, i) +
+             '<span class="chip-name">' + s.name + '</span></button>';
+  });
+  return out;
+}
+
+function renderJoin(stage, dock){
+  dock.hidden = true;
+  dock.innerHTML = '';
+  if(!joinBuilt){
+    joinBuilt = true;
+    stage.innerHTML =
+      '<p class="lede">一台设备开主机，其他人连同一个 WiFi 或热点，各自用自己手机进来报名、选骰子。<b>骰面全公开</b>，名次由主机同步。</p>' +
+      '<div class="field"><span class="field-label">你的名字</span><span class="sub-label">最多 8 个字</span></div>' +
+      '<div class="namebox"><input id="joinName" maxlength="8" placeholder="报个名字" value="' + esc(myName) + '"></div>' +
+      '<div class="field"><span class="field-label">你的骰子</span><span class="sub-label">只换外观</span></div>' +
+      '<div class="skins" id="joinSkins">' + skinChips(mySkin, 'data-js') + '</div>' +
+      '<button class="primary" id="btnJoin">进房间</button>' +
+      '<div class="field" style="margin-top:18px"><span class="field-label">房间里的人</span></div>' +
+      '<div class="plist" id="joinList"></div>';
+    stage.querySelectorAll('[data-js]').forEach(function(b){
+      b.addEventListener('click', function(){
+        mySkin = +b.dataset.js;
+        localStorage.setItem('szqd_skin', mySkin);
+        stage.querySelectorAll('#joinSkins .skin-chip').forEach(function(x, i){ x.classList.toggle('on', i === mySkin); });
+      });
+    });
+    document.getElementById('btnJoin').addEventListener('click', function(){
+      const n = document.getElementById('joinName').value.trim();
+      if(!n){ toast('先起个名字'); return; }
+      myName = n;
+      localStorage.setItem('szqd_name', myName);
+      joinRoom(false);
+    });
+  }
+  updateJoinList();
+}
+function updateJoinList(){
+  const box = document.getElementById('joinList');
+  if(!box || !state) return;
+  if(!state.players.length){ box.innerHTML = '<div class="empty">还没人进来</div>'; return; }
+  let html = '';
+  state.players.forEach(function(p, i){
+    html += '<div class="prow"><span class="nm">' + esc(p.name) + '</span>' +
+            (i === 0 ? '<span class="tag">最先来的</span>' : '') +
+            '<span class="mini-dice">' + cubeHTML(4, 22, -8, p.skin) + cubeHTML(1, 22, 6, p.skin) + '</span></div>';
+  });
+  box.innerHTML = html;
+}
+function joinRoom(silent){
+  const name = myName || '玩家';
+  api('/api/action', {type:'join', pid:me, name:name, skin:mySkin}).then(function(j){
+    if(j.ok){
+      me = j.pid;
+      localStorage.setItem('szqd_pid', me);
+      joinBuilt = false;
+      render();
+    }else if(!silent){
+      toast(j.err || '进不去');
+    }
+  });
+}
+
+function renderLobby(stage, dock){
+  dock.hidden = true;
+  dock.innerHTML = '';
+  const isHost = state.players[0] && state.players[0].id === me;
+  let rows = '';
+  state.players.forEach(function(p, i){
+    rows += '<div class="prow' + (p.id === me ? ' me' : '') + '">' +
+            '<span class="nm">' + esc(p.name) + '</span>' +
+            (i === 0 ? '<span class="tag">主机</span>' : '') +
+            (p.id === me ? '<span class="tag mine">你</span>' : '') +
+            '<span class="mini-dice">' + cubeHTML(4, 22, -8, p.skin) + cubeHTML(1, 22, 6, p.skin) + '</span>' +
+          '</div>';
+  });
+  stage.innerHTML =
+    '<p class="lede">人齐了就开始。<b>每人 3 颗骰子</b>，开局自动摇一次，骰面全公开；永远是<b>倒数第一追倒数第二</b>。</p>' +
+    '<div class="field"><span class="field-label">房间（' + state.players.length + ' 人）</span><span class="sub-label">' + (isHost ? '你是主机' : '等主机开局') + '</span></div>' +
+    '<div class="plist">' + rows + '</div>' +
+    (isHost ? '<button class="primary" id="btnStart"' + (state.players.length < 2 ? ' disabled' : '') + '>开局摇骰</button>' : '<div class="waitline">等 <b>' + esc(state.players[0] ? state.players[0].name : '') + '</b> 开局</div>');
+  const own = findP(me);
+  const chips = '<div class="field" style="margin-top:18px"><span class="field-label">我的骰子</span><span class="sub-label">开局后不能再换</span></div>' +
+                '<div class="skins" id="lobbySkins">' + skinChips(own ? own.skin : mySkin, 'data-ls') + '</div>';
+  stage.innerHTML += chips;
+
+  stage.querySelectorAll('[data-ls]').forEach(function(b){
+    b.addEventListener('click', function(){
+      mySkin = +b.dataset.ls;
+      localStorage.setItem('szqd_skin', mySkin);
+      act('skin', {skin:mySkin});
+    });
+  });
+  const bs = document.getElementById('btnStart');
+  if(bs) bs.addEventListener('click', function(){ act('start'); });
+}
+
+function triple(d, j, skin, size){
+  if(!d) return '';
+  const jj = j || [0,0,0];
+  return cubeHTML(d[0], size, jj[0], skin) + cubeHTML(d[1], size, jj[1], skin) + cubeHTML(d[2], size, jj[2], skin);
+}
+function cardHTML(p, ds, isChaser, isTarget){  const idx = state.order.indexOf(p.id);
+  let badge = '<span class="badge pos">等开局</span>';
+  if(p.res){
+    if(idx === state.order.length - 1) badge = '<span class="badge chaser">倒数第一</span>';
+    else if(idx === state.order.length - 2) badge = '<span class="badge target">倒数第二</span>';
+    else if(idx === 0) badge = '<span class="badge lead">最大</span>';
+    else badge = '<span class="badge pos">第 ' + (idx + 1) + '</span>';
+  }
+  const cups = p.drinks > 0 ? '<span class="cups">' + p.drinks + ' 杯</span>' : '';
+  const typeHTML = p.res
+    ? '<div class="ptype t' + p.res.tier + '">' + p.res.label + '<span class="sub">' + p.res.sub + '</span></div>'
+    : '<div class="ptype t1">—</div>';
+  return '<div class="pcard' + (isChaser ? ' is-chaser' : '') + (isTarget ? ' is-target' : '') +
+          (p.id === me ? ' is-me' : '') + '">' +
+           '<div class="pcard-top"><span class="pname">' + esc(p.name) + cups + '</span>' + badge + '</div>' +
+           '<div class="dice-row" data-dice="' + p.id + '">' +
+             cubeHTML(p.dice[0], ds, p.j[0], p.skin) +
+             cubeHTML(p.dice[1], ds, p.j[1], p.skin) +
+             cubeHTML(p.dice[2], ds, p.j[2], p.skin) +
+           '</div>' + typeHTML + '</div>';
+}
+
+function renderGame(stage, dock){
+  dock.hidden = false;
+  const active = (state.phase === 'deal' || state.phase === 'roll');
+  let cards = '';
+  state.players.forEach(function(p){
+    const isChaser = active && p.id === state.chaserId;
+    const isTarget = active && p.id === state.targetId;
+    cards += cardHTML(p, (isChaser || isTarget) ? 34 : 30, isChaser, isTarget);
+  });
+
+  stage.innerHTML =
+    '<div class="tablehead"><span class="round">' + state.players.length + ' 人 · 追成 ' + state.catches + ' 次 · 共 ' + state.drinks + ' 杯</span></div>' +
+    '<div class="order">豹子 ＞ 顺子 ＞ 对子 ＞ 杂牌</div>' +
+    '<div class="players">' + cards + '</div>';
+
+  dock.innerHTML = dockHTML();
+  bindDock(dock);
+}
+function dockHTML(){
+  const chaser = findP(state.chaserId), target = findP(state.targetId);
+  const isChaser = me === state.chaserId;
+  const quit = '<div class="linkrow"><button class="mini" id="btnQuit">认输，散场</button></div>';
+
+  if(state.phase === 'finish') return finishHTML();
+
+  if(state.phase === 'deal'){
+    if(!chaser || !target) return '<div class="waitline">等人来</div>';
+    if(!isChaser){
+      return '<div class="callout">' +
+               '<div class="callout-key">倒数第一 <b>' + esc(chaser.name) + '</b> 追 倒数第二 <b class="gold">' + esc(target.name) + '</b></div>' +
+               '<div class="callout-sub">要追平或超过 ' + target.res.label + '（' + target.res.sub + '）</div>' +
+             '</div>' +
+             '<div class="waitline">等 <b>' + esc(chaser.name) + '</b> 选玩法</div>' + quit;
+    }
+    return '<div class="callout">' +
+             '<div class="callout-key">你来追 <b class="gold">' + esc(target.name) + '</b></div>' +
+             '<div class="callout-sub">要追平或超过 ' + target.res.label + '（' + target.res.sub + '）</div>' +
+           '</div>' +
+           '<div class="plans">' +
+             '<button class="plan" data-plan="ten"><span class="plan-t">先喝一杯，摇 10 次</span>' +
+               '<span class="plan-d">当场记一杯，换 10 次机会去追</span></button>' +
+             '<button class="plan" data-plan="five"><span class="plan-t">先摇 5 次</span>' +
+               '<span class="plan-d">追到就不用喝，5 次没追到喝一杯</span></button>' +
+           '</div>' + quit;
+  }
+
+  if(state.phase === 'roll'){
+    const d = (state.rolling && state.lastRoll) ? state.lastRoll.dice : (chaser ? chaser.dice : [1,1,1]);
+    let chips = '';
+    state.history.forEach(function(h){
+      chips += '<span class="chip t' + h.tier + '">' + h.label + ' ' + h.sub + '</span>';
+    });
+    const cur = state.rolling ? '摇着呢' : (state.history.length ? state.history[state.history.length - 1].label + ' ' + state.history[state.history.length - 1].sub : '还没摇');
+    return '<div class="rollstage">' +
+             '<div class="rollstage-top">' +
+               '<span class="who">' + esc(chaser ? chaser.name : '') + ' · ' + (state.plan === 'ten' ? '已记一杯' : '不罚酒') + '</span>' +
+               '<span class="counter">剩 ' + state.rollsLeft + ' 次</span>' +
+             '</div>' +
+             '<div class="dice-lg" id="active-dice">' +
+               cubeHTML(d[0], 52, chaser ? chaser.j[0] : 0, chaser ? chaser.skin : 0) +
+               cubeHTML(d[1], 52, chaser ? chaser.j[1] : 0, chaser ? chaser.skin : 0) +
+               cubeHTML(d[2], 52, chaser ? chaser.j[2] : 0, chaser ? chaser.skin : 0) +
+             '</div>' +
+             '<div class="compare">当前：<b>' + cur + '</b><br><span class="need">要追平或超过 ' + (target ? target.res.label + ' ' + target.res.sub : '') + '</span></div>' +
+             (chips ? '<div class="history">' + chips + '</div>' : '') +
+           '</div>' +
+           (isChaser ? '<button class="primary" id="btnRoll"' + (state.rolling ? ' disabled' : '') + '>摇</button>' : '<div class="waitline">等 <b>' + esc(chaser ? chaser.name : '') + '</b> 摇</div>') +
+           quit;
+  }
+
+  // result
+  const ok = state.result === 'success';
+  if(ok){
+    const t = state.resultTarget || {name:'', res:{tier:1,label:'',sub:''}, dice:null, skin:0, j:[0,0,0]};
+    const mine = state.lastRoll ? state.lastRoll.res : null;
+    const idx = state.order.indexOf(state.chaserId);
+    const above = idx > 0 ? findP(state.order[idx - 1]) : null;
+    const chaserJ = chaser ? chaser.j : [0,0,0];
+    const chaserSkin = chaser ? chaser.skin : 0;
+    let btn = '';
+    if(isChaser){
+      btn = (state.canContinue && above)
+        ? '<button class="primary" id="btnGo">继续丢</button><div class="linkrow"><button class="mini" id="btnStop">收手，换人</button></div>'
+        : '<button class="primary" id="btnStop">换下一位</button>';
+    }else{
+      btn = '<div class="waitline">等 <b>' + esc(chaser ? chaser.name : '') + '</b> 决定要不要接着丢</div>';
+    }
+    return '<div class="verdict ok">' +
+             '<div class="verdict-title">追上了</div>' +
+             '<div class="verdict-sub">' + esc(chaser ? chaser.name : '') + ' 追上 ' + esc(t.name) + '，现在排第 ' + (idx + 1) + '，还剩 ' + state.rollsLeft + ' 次' +
+               (state.canContinue && above ? '；可以接着追 ' + esc(above.name) : '') + '</div>' +
+           '</div>' +
+           '<div class="duel">' +
+             '<div class="duel-side"><div class="duel-role">追的一方</div>' +
+               '<div class="duel-name">' + esc(chaser ? chaser.name : '') + '</div>' +
+               '<div class="dice-row mini-row">' + triple(state.lastRoll ? state.lastRoll.dice : null, chaserJ, chaserSkin, 28) + '</div>' +
+               '<div class="duel-type t' + (mine ? mine.tier : 1) + '">' + (mine ? mine.label : '') +
+                 '<span class="sub">' + (mine ? mine.sub : '') + '</span></div>' +
+             '</div>' +
+             '<div class="duel-vs">对</div>' +
+             '<div class="duel-side"><div class="duel-role">被追</div>' +
+               '<div class="duel-name">' + esc(t.name) + '</div>' +
+               '<div class="dice-row mini-row">' + triple(t.dice, t.j || [0,0,0], t.skin || 0, 28) + '</div>' +
+               '<div class="duel-type t' + t.res.tier + '">' + t.res.label + '<span class="sub">' + t.res.sub + '</span></div>' +
+             '</div>' +
+           '</div>' + btn;
+  }
+  const best = state.history.length ? state.history[state.history.length - 1] : null;
+  return '<div class="verdict bad">' +
+           '<div class="verdict-title">没追上</div>' +
+           '<div class="dice-row mini-row">' + triple(state.lastRoll ? state.lastRoll.dice : null, chaser ? chaser.j : [0,0,0], chaser ? chaser.skin : 0, 30) + '</div>' +
+           '<div class="verdict-sub">' + esc(chaser ? chaser.name : '') + (state.plan === 'ten' ? ' 10 次用完，不用再罚' : ' 喝一杯') +
+             (best ? '，最好的一手是 ' + best.label + ' ' + best.sub : '') + '</div>' +
+         '</div>' +
+         (isChaser ? '<button class="primary" id="btnAgain">继续追</button>' : '<div class="waitline">等 <b>' + esc(chaser ? chaser.name : '') + '</b> 继续</div>') +
+         quit;
+}
+function finishHTML(){
+  const sorted = state.players.slice().sort(function(a, b){ return (b.drinks || 0) - (a.drinks || 0); });
+  let rows = '';
+  sorted.forEach(function(p){
+    const n = p.drinks || 0;
+    rows += '<div class="sum-row"><span class="sum-name">' + esc(p.name) + '</span>' +
+            '<span class="sum-cups' + (n === 0 ? ' zero' : '') + '">' + (n === 0 ? '没喝' : n + ' 杯') + '</span></div>';
+  });
+  return '<div class="verdict bad"><div class="verdict-title">散场</div>' +
+           '<div class="verdict-sub">本场追成 ' + state.catches + ' 次，共罚 ' + state.drinks + ' 杯</div></div>' +
+         '<div class="summary">' + rows + '</div>' +
+         '<button class="primary" id="btnRestart">再来一局</button>' +
+         '<div class="linkrow"><button class="mini" id="btnLobby">回大厅等人</button></div>';
+}
+
+function bindDock(dock){
+  dock.querySelectorAll('[data-plan]').forEach(function(b){
+    b.addEventListener('click', function(){ act('plan', {plan:b.dataset.plan}); });
+  });
+  const map = {btnRoll:'roll', btnGo:'continue', btnStop:'stop', btnAgain:'again', btnQuit:'surrender', btnRestart:'restart', btnLobby:'lobby'};
+  Object.keys(map).forEach(function(id){
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('click', function(){
+      if(id === 'btnQuit'){
+        if(!confirm('确定认输散场？')) return;
+      }
+      act(map[id]);
+    });
+  });
+}
+
+/* ================= 声音 / 规则 ================= */
+const btnSound = document.getElementById('btnSound');
+btnSound.addEventListener('click', function(){
+  soundOn = !soundOn;
+  btnSound.textContent = soundOn ? '声音 开' : '声音 关';
+  btnSound.style.color = soundOn ? '' : '#5f746b';
+  if(soundOn){ ensureAudio(); sfxLand(); }
+});
+const sheet = document.getElementById('sheet'), scrim = document.getElementById('scrim');
+document.getElementById('btnRule').addEventListener('click', function(){ sheet.classList.add('on'); scrim.classList.add('on'); });
+document.getElementById('btnClose').addEventListener('click', function(){ sheet.classList.remove('on'); scrim.classList.remove('on'); });
+scrim.addEventListener('click', function(){ sheet.classList.remove('on'); scrim.classList.remove('on'); });
+
+/* ================= 启动 ================= */
+render();
+loop();
+</script>
+</body>
+</html>
